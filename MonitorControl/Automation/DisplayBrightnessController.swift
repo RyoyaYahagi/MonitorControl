@@ -121,6 +121,10 @@ final class DisplayBrightnessController {
     (self.sensorSource as? ManualToggleSensorStateSource)?.setState(state)
   }
 
+  func clearTestSensorState() {
+    (self.sensorSource as? ManualToggleSensorStateSource)?.clear()
+  }
+
   private func scheduleNextPoll() {
     DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
       guard let controller = self, controller.isRunning else {
