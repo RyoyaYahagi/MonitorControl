@@ -57,6 +57,10 @@ final class DisplayBrightnessController {
   private let manualObserver: ManualBrightnessChangeObserving
   private let applier: AutomationBrightnessApplying
   private var isRunning = false
+  private var wakeObserverTokens: [NSObjectProtocol] = []
+  private var displayCallbackRegistered = false
+  private var reapplicationDebounceUntil = Date.distantPast
+  private var reapplicationWorkItem: DispatchWorkItem?
 
   init(
     sensorSource: SensorStateSource = ManualToggleSensorStateSource.shared,
@@ -74,8 +78,30 @@ final class DisplayBrightnessController {
     }
     self.isRunning = true
     _ = self.manualObserver.detectManualBrightnessChange() // Establish the initial DDC baseline.
+    self.registerResumeObservers()
+    self.registerDisplayReconfigurationCallback()
     AutomationLogger.log("Started; polling every 60 seconds")
     self.scheduleNextPoll()
+  }
+
+  func requestReapplication(reason: String) {
+    if !self.stateMachine.hasPendingReapplication {
+      AutomationLogger.log("Reapplication requested: \(reason)")
+    }
+    self.stateMachine.requestReapplication()
+    self.reapplicationDebounceUntil = Date().addingTimeInterval(5)
+
+    self.reapplicationWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let controller = self,
+            controller.isRunning,
+            controller.stateMachine.hasPendingReapplication else {
+        return
+      }
+      controller.poll()
+    }
+    self.reapplicationWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
   }
 
   /// Test route for Phase 2; no UI or sensor network integration is included.
@@ -97,6 +123,32 @@ final class DisplayBrightnessController {
     }
   }
 
+  private func registerResumeObservers() {
+    let notificationCenter = NSWorkspace.shared.notificationCenter
+    for name in [NSWorkspace.screensDidWakeNotification, NSWorkspace.didWakeNotification] {
+      let token = notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        self?.requestReapplication(reason: "system wake")
+      }
+      self.wakeObserverTokens.append(token)
+    }
+  }
+
+  private func registerDisplayReconfigurationCallback() {
+    guard !self.displayCallbackRegistered else {
+      return
+    }
+    let result = CGDisplayRegisterReconfigurationCallback({ _, _, _ in
+      DispatchQueue.main.async {
+        DisplayBrightnessController.shared.requestReapplication(reason: "display reconfiguration")
+      }
+    }, nil)
+    if result == .success {
+      self.displayCallbackRegistered = true
+    } else {
+      AutomationLogger.log("Could not register display reconfiguration callback: \(result.rawValue)")
+    }
+  }
+
   private func poll() {
     let now = Date()
     let manualChange = self.manualObserver.detectManualBrightnessChange()
@@ -105,15 +157,28 @@ final class DisplayBrightnessController {
       now: now,
       manualBrightnessChanged: manualChange
     )
-    guard case let .apply(state) = outcome else {
+    switch outcome {
+    case .none:
       return
+    case let .apply(state):
+      guard self.applier.apply(state) else {
+        AutomationLogger.log("No applicable display preset for \(state.rawValue); will retry")
+        return
+      }
+      self.stateMachine.recordSuccessfulTransition(to: state, at: now)
+      AutomationLogger.log("Applied \(state.rawValue) brightness preset")
+    case let .reapply(state):
+      guard now >= self.reapplicationDebounceUntil else {
+        return
+      }
+      guard self.applier.apply(state) else {
+        AutomationLogger.log("No applicable display preset for reapplication of \(state.rawValue); will retry")
+        return
+      }
+      self.stateMachine.recordSuccessfulReapplication(to: state, at: now)
+      self.reapplicationWorkItem?.cancel()
+      self.reapplicationWorkItem = nil
+      AutomationLogger.log("Reapplied \(state.rawValue) brightness preset")
     }
-
-    guard self.applier.apply(state) else {
-      AutomationLogger.log("No applicable display preset for \(state.rawValue); will retry")
-      return
-    }
-    self.stateMachine.recordSuccessfulTransition(to: state, at: now)
-    AutomationLogger.log("Applied \(state.rawValue) brightness preset")
   }
 }

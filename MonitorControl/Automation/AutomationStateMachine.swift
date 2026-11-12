@@ -17,16 +17,18 @@ struct SensorStateReading {
 enum AutomationStateMachineOutcome {
   case none
   case apply(AutomationLightState)
+  case reapply(AutomationLightState)
 }
 
 struct AutomationStateMachine {
   let confirmationCount = 3
   let switchCooldown: TimeInterval = 10 * 60
   let manualOverrideDuration: TimeInterval = 30 * 60
-  let maximumSensorAge: TimeInterval = 2 * 60
+  let maximumSensorAge: TimeInterval = 10 * 60
 
   private(set) var activeState: AutomationLightState?
   private(set) var lastTransitionAt: Date?
+  private(set) var hasPendingReapplication = false
 
   private var candidateState: AutomationLightState?
   private var consecutiveCount = 0
@@ -47,7 +49,7 @@ struct AutomationStateMachine {
 
     guard let reading = reading,
           reading.sampledAt <= now,
-          now.timeIntervalSince(reading.sampledAt) <= self.maximumSensorAge else {
+          now.timeIntervalSince(reading.sampledAt) < self.maximumSensorAge else {
       self.candidateState = nil
       self.consecutiveCount = 0
       return .none
@@ -72,24 +74,45 @@ struct AutomationStateMachine {
       self.manualOverrideReferenceState = nil
       self.candidateState = nil
       self.consecutiveCount = 0
+      self.hasPendingReapplication = true
       AutomationLogger.log(expired ? "Manual pause expired" : "Sensor reversed; manual pause ended")
       return .none
     }
 
-    guard self.consecutiveCount >= self.confirmationCount,
-          self.activeState != reading.state else {
-      return .none
+    let candidateIsConfirmed = self.consecutiveCount >= self.confirmationCount
+    if candidateIsConfirmed, self.activeState != reading.state {
+      if self.hasPendingReapplication {
+        return .reapply(reading.state)
+      }
+      if let lastTransitionAt = self.lastTransitionAt,
+         now.timeIntervalSince(lastTransitionAt) < self.switchCooldown {
+        return .none
+      }
+      return .apply(reading.state)
     }
-    if let lastTransitionAt = self.lastTransitionAt,
-       now.timeIntervalSince(lastTransitionAt) < self.switchCooldown {
-      return .none
+
+    if self.hasPendingReapplication, self.activeState == reading.state {
+      return .reapply(reading.state)
     }
-    return .apply(reading.state)
+    return .none
+  }
+
+  mutating func requestReapplication() {
+    self.hasPendingReapplication = true
   }
 
   mutating func recordSuccessfulTransition(to state: AutomationLightState, at date: Date) {
     self.activeState = state
     self.lastTransitionAt = date
+    self.hasPendingReapplication = false
+  }
+
+  mutating func recordSuccessfulReapplication(to state: AutomationLightState, at date: Date) {
+    if self.activeState != state {
+      self.activeState = state
+      self.lastTransitionAt = date
+    }
+    self.hasPendingReapplication = false
   }
 
   private mutating func updateCandidate(with state: AutomationLightState) {
