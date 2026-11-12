@@ -178,8 +178,11 @@ final class DisplayBrightnessController {
       }
       self.stateMachine.recordSuccessfulTransition(to: state, at: now)
       AutomationLogger.log("Applied \(state.rawValue) brightness preset")
-    case let .reapply(state, source):
-      if case .lifecycleEvent = source {
+    case let .reapply(state, sources):
+      let includesManualOverride = sources.contains(.manualOverride)
+      // A manual-release cause takes precedence over lifecycle-only waiting.
+      let isLifecycleOnly = sources.contains(.lifecycleEvent) && !includesManualOverride
+      if isLifecycleOnly {
         guard now >= self.reapplicationDebounceUntil else {
           return
         }
@@ -188,7 +191,8 @@ final class DisplayBrightnessController {
         AutomationLogger.log("No applicable display preset for reapplication of \(state.rawValue); will retry")
         return
       }
-      if case .lifecycleEvent = source {
+      // Preserve lifecycle deduplication for trailing notifications in a merged request.
+      if sources.contains(.lifecycleEvent) {
         self.lastLifecycleReapplication = (state, now)
       }
       self.stateMachine.recordSuccessfulReapplication(to: state, at: now)
