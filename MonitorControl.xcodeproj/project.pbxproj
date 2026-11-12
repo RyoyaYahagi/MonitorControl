@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+			B10000000000000000000001 /* AutomationStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* AutomationStateMachine.swift */; };
+			B10000000000000000000002 /* SensorStateSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* SensorStateSource.swift */; };
+			B10000000000000000000003 /* BrightnessPresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* BrightnessPresetStore.swift */; };
+			B10000000000000000000004 /* DisplayBrightnessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* DisplayBrightnessController.swift */; };
+			B10000000000000000000005 /* ManualBrightnessObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* ManualBrightnessObserver.swift */; };
+			B10000000000000000000006 /* AutomationLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000C /* AutomationLogger.swift */; };
 		28D1DDF2227FBE71004CB494 /* NSScreen+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28D1DDF1227FBE71004CB494 /* NSScreen+Extension.swift */; };
 		28D1DDF3227FC8C6004CB494 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 56754EB01D9A4016007BCDC5 /* Assets.xcassets */; };
 		56754EAF1D9A4016007BCDC5 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56754EAE1D9A4016007BCDC5 /* main.swift */; };
@@ -75,6 +81,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+			B10000000000000000000007 /* AutomationStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationStateMachine.swift; sourceTree = "<group>"; };
+			B10000000000000000000008 /* SensorStateSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorStateSource.swift; sourceTree = "<group>"; };
+			B10000000000000000000009 /* BrightnessPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessPresetStore.swift; sourceTree = "<group>"; };
+			B1000000000000000000000A /* DisplayBrightnessController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayBrightnessController.swift; sourceTree = "<group>"; };
+			B1000000000000000000000B /* ManualBrightnessObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualBrightnessObserver.swift; sourceTree = "<group>"; };
+			B1000000000000000000000C /* AutomationLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationLogger.swift; sourceTree = "<group>"; };
 		01D6471D2AF916A800321FFB /* hi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = hi; path = hi.lproj/Main.strings; sourceTree = "<group>"; };
 		3FA7CC692A9525B4AD4ADF52 /* fa */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fa; path = fa.lproj/Main.strings; sourceTree = "<group>"; };
 		01D6471E2AF916A800321FFB /* hi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = hi; path = hi.lproj/InternetAccessPolicy.strings; sourceTree = "<group>"; };
@@ -257,6 +269,7 @@
 		56754EAD1D9A4016007BCDC5 /* MonitorControl */ = {
 			isa = PBXGroup;
 			children = (
+				B1000000000000000000000D /* Automation */,
 				6CF93A782707981300BA219D /* MonitorControlDebug.entitlements */,
 				8C1741842707B91100E88D53 /* InternetAccessPolicy.plist */,
 				F01B0686228221B6008E64DB /* Info.plist */,
@@ -270,6 +283,19 @@
 				F0445D3620023D5B0025AE82 /* View Controllers */,
 			);
 			path = MonitorControl;
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000D /* Automation */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000007 /* AutomationStateMachine.swift */,
+				B10000000000000000000008 /* SensorStateSource.swift */,
+				B10000000000000000000009 /* BrightnessPresetStore.swift */,
+				B1000000000000000000000A /* DisplayBrightnessController.swift */,
+				B1000000000000000000000B /* ManualBrightnessObserver.swift */,
+				B1000000000000000000000C /* AutomationLogger.swift */,
+			);
+			path = Automation;
 			sourceTree = "<group>";
 		};
 		6C6C34F423DB25BF00C0E9CB /* Model */ = {
@@ -621,6 +647,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000001 /* AutomationStateMachine.swift in Sources */,
+				B10000000000000000000002 /* SensorStateSource.swift in Sources */,
+				B10000000000000000000003 /* BrightnessPresetStore.swift in Sources */,
+				B10000000000000000000004 /* DisplayBrightnessController.swift in Sources */,
+				B10000000000000000000005 /* ManualBrightnessObserver.swift in Sources */,
+				B10000000000000000000006 /* AutomationLogger.swift in Sources */,
 				AA5314C426EBF5170041D178 /* PrefKey.swift in Sources */,
 				56754EAF1D9A4016007BCDC5 /* main.swift in Sources */,
 				AA062E8A26C9A039007E628C /* DisplaysPrefsViewController.swift in Sources */,

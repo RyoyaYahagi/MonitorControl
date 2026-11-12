@@ -65,6 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     self.setMenu()
     CGDisplayRegisterReconfigurationCallback({ _, _, _ in app.displayReconfigured() }, nil)
     self.configure(firstrun: true)
+    DisplayBrightnessController.shared.start()
     DisplayManager.shared.createGammaActivityEnforcer()
     self.updaterController.startUpdater()
   }
