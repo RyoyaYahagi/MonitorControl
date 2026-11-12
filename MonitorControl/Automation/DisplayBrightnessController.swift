@@ -146,7 +146,7 @@ final class DisplayBrightnessController {
       return
     }
     let result = CGDisplayRegisterReconfigurationCallback({ _, flags, _ in
-      if (flags & kCGDisplayBeginConfigurationFlag) != 0 {
+      if flags.contains(.beginConfigurationFlag) {
         return
       }
       DispatchQueue.main.async {
