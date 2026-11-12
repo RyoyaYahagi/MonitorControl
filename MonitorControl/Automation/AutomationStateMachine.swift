@@ -17,7 +17,12 @@ struct SensorStateReading {
 enum AutomationStateMachineOutcome {
   case none
   case apply(AutomationLightState)
-  case reapply(AutomationLightState)
+  case reapply(AutomationLightState, source: AutomationReapplicationSource)
+}
+
+enum AutomationReapplicationSource {
+  case manualOverride
+  case lifecycleEvent
 }
 
 struct AutomationStateMachine {
@@ -28,7 +33,15 @@ struct AutomationStateMachine {
 
   private(set) var activeState: AutomationLightState?
   private(set) var lastTransitionAt: Date?
-  private(set) var hasPendingReapplication = false
+  private(set) var pendingReapplicationSource: AutomationReapplicationSource?
+
+  var hasPendingReapplication: Bool {
+    self.pendingReapplicationSource != nil
+  }
+
+  var confirmedSensorState: AutomationLightState? {
+    self.consecutiveCount >= self.confirmationCount ? self.candidateState : self.activeState
+  }
 
   private var candidateState: AutomationLightState?
   private var consecutiveCount = 0
@@ -74,7 +87,7 @@ struct AutomationStateMachine {
       self.manualOverrideReferenceState = nil
       self.candidateState = nil
       self.consecutiveCount = 0
-      self.hasPendingReapplication = true
+      self.requestManualOverrideReapplication()
       AutomationLogger.log(expired ? "Manual pause expired" : "Sensor reversed; manual pause ended")
       return .none
     }
@@ -82,7 +95,7 @@ struct AutomationStateMachine {
     let candidateIsConfirmed = self.consecutiveCount >= self.confirmationCount
     if candidateIsConfirmed, self.activeState != reading.state {
       if self.hasPendingReapplication {
-        return .reapply(reading.state)
+        return .reapply(reading.state, source: self.pendingReapplicationSource ?? .manualOverride)
       }
       if let lastTransitionAt = self.lastTransitionAt,
          now.timeIntervalSince(lastTransitionAt) < self.switchCooldown {
@@ -92,19 +105,25 @@ struct AutomationStateMachine {
     }
 
     if self.hasPendingReapplication, self.activeState == reading.state {
-      return .reapply(reading.state)
+      return .reapply(reading.state, source: self.pendingReapplicationSource ?? .manualOverride)
     }
     return .none
   }
 
-  mutating func requestReapplication() {
-    self.hasPendingReapplication = true
+  mutating func requestLifecycleReapplication() {
+    self.pendingReapplicationSource = .lifecycleEvent
+  }
+
+  private mutating func requestManualOverrideReapplication() {
+    if self.pendingReapplicationSource == nil {
+      self.pendingReapplicationSource = .manualOverride
+    }
   }
 
   mutating func recordSuccessfulTransition(to state: AutomationLightState, at date: Date) {
     self.activeState = state
     self.lastTransitionAt = date
-    self.hasPendingReapplication = false
+    self.pendingReapplicationSource = nil
   }
 
   mutating func recordSuccessfulReapplication(to state: AutomationLightState, at date: Date) {
@@ -112,7 +131,7 @@ struct AutomationStateMachine {
       self.activeState = state
       self.lastTransitionAt = date
     }
-    self.hasPendingReapplication = false
+    self.pendingReapplicationSource = nil
   }
 
   private mutating func updateCandidate(with state: AutomationLightState) {

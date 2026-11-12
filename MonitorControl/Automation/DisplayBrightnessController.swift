@@ -61,6 +61,7 @@ final class DisplayBrightnessController {
   private var displayCallbackRegistered = false
   private var reapplicationDebounceUntil = Date.distantPast
   private var reapplicationWorkItem: DispatchWorkItem?
+  private var lastLifecycleReapplication: (state: AutomationLightState, at: Date)?
 
   init(
     sensorSource: SensorStateSource = ManualToggleSensorStateSource.shared,
@@ -85,11 +86,18 @@ final class DisplayBrightnessController {
   }
 
   func requestReapplication(reason: String) {
+    let now = Date()
+    if let last = self.lastLifecycleReapplication,
+       self.stateMachine.confirmedSensorState == last.state,
+       now.timeIntervalSince(last.at) < 60 {
+      AutomationLogger.log("Dropped duplicate lifecycle reapplication for \(last.state.rawValue) within 60 seconds")
+      return
+    }
     if !self.stateMachine.hasPendingReapplication {
       AutomationLogger.log("Reapplication requested: \(reason)")
     }
-    self.stateMachine.requestReapplication()
-    self.reapplicationDebounceUntil = Date().addingTimeInterval(5)
+    self.stateMachine.requestLifecycleReapplication()
+    self.reapplicationDebounceUntil = now.addingTimeInterval(5)
 
     self.reapplicationWorkItem?.cancel()
     let workItem = DispatchWorkItem { [weak self] in
@@ -137,7 +145,10 @@ final class DisplayBrightnessController {
     guard !self.displayCallbackRegistered else {
       return
     }
-    let result = CGDisplayRegisterReconfigurationCallback({ _, _, _ in
+    let result = CGDisplayRegisterReconfigurationCallback({ _, flags, _ in
+      if (flags & kCGDisplayBeginConfigurationFlag) != 0 {
+        return
+      }
       DispatchQueue.main.async {
         DisplayBrightnessController.shared.requestReapplication(reason: "display reconfiguration")
       }
@@ -167,13 +178,18 @@ final class DisplayBrightnessController {
       }
       self.stateMachine.recordSuccessfulTransition(to: state, at: now)
       AutomationLogger.log("Applied \(state.rawValue) brightness preset")
-    case let .reapply(state):
-      guard now >= self.reapplicationDebounceUntil else {
-        return
+    case let .reapply(state, source):
+      if case .lifecycleEvent = source {
+        guard now >= self.reapplicationDebounceUntil else {
+          return
+        }
       }
       guard self.applier.apply(state) else {
         AutomationLogger.log("No applicable display preset for reapplication of \(state.rawValue); will retry")
         return
+      }
+      if case .lifecycleEvent = source {
+        self.lastLifecycleReapplication = (state, now)
       }
       self.stateMachine.recordSuccessfulReapplication(to: state, at: now)
       self.reapplicationWorkItem?.cancel()
