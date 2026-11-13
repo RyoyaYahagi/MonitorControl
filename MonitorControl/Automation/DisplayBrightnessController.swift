@@ -24,28 +24,27 @@ final class MonitorControlBrightnessApplier: AutomationBrightnessApplying {
         && !display.readPrefAsBool(key: .unavailableDDC, for: .brightness)
     }
     guard !eligibleDisplays.isEmpty else {
+      AutomationLogger.log("No eligible displays for \(state.rawValue) brightness preset; applied 0")
       return false
     }
 
-    let targets = eligibleDisplays.compactMap { display -> (OtherDisplay, Float)? in
+    var appliedCount = 0
+    for display in eligibleDisplays {
       guard let target = self.presets.brightness(for: state, displayID: display.prefsId) else {
-        return nil
+        AutomationLogger.log("Skipped \(state.rawValue) preset for display \(display.identifier) (\(display.name), \(display.prefsId)): no preset registered")
+        continue
       }
-      return (display, target)
-    }
-    guard targets.count == eligibleDisplays.count else {
-      return false
-    }
-
-    for (display, target) in targets {
       // setBrightness owns the upstream smooth transition. Do not add a second
       // fade here; the existing combined DDC/software behavior remains intact.
       guard display.setBrightness(target, slow: true) else {
-        return false
+        AutomationLogger.log("Could not apply \(state.rawValue) preset to display \(display.identifier) (\(display.name), \(display.prefsId)): setBrightness returned false")
+        continue
       }
       self.manualObserver.noteAutomatedBrightnessChange(displayID: display.identifier, target: target)
+      appliedCount += 1
     }
-    return true
+    AutomationLogger.log("Applied \(state.rawValue) brightness preset on \(appliedCount) of \(eligibleDisplays.count) eligible displays")
+    return appliedCount > 0
   }
 }
 
