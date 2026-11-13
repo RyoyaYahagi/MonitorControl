@@ -7,6 +7,8 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
   private let presets = BrightnessPresetStore()
   private weak var menu: NSMenu?
   private var previousDelegate: NSMenuDelegate?
+  private let presetRegistrationQueue = DispatchQueue(label: "MonitorControl.BrightnessPresetRegistration")
+  private var isRegisteringPreset = false
 
   func install(in menu: NSMenu) {
     guard self.menu !== menu else {
@@ -51,6 +53,9 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
   }
 
   private func registerPreset(for state: AutomationLightState) {
+    guard !self.isRegisteringPreset else {
+      return
+    }
     let displays = DisplayManager.shared.getDdcCapableDisplays()
     guard !displays.isEmpty else {
       AutomationLogger.log("Could not register \(state.rawValue) preset: no DDC-capable displays")
@@ -58,6 +63,21 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
       return
     }
 
+    self.isRegisteringPreset = true
+    self.refreshMenu()
+    self.presetRegistrationQueue.async { [weak self] in
+      guard let controller = self else {
+        return
+      }
+      controller.captureAndSavePreset(for: state, on: displays)
+      DispatchQueue.main.async {
+        controller.isRegisteringPreset = false
+        controller.refreshMenu()
+      }
+    }
+  }
+
+  private func captureAndSavePreset(for state: AutomationLightState, on displays: [OtherDisplay]) {
     var savedCount = 0
     for display in displays {
       guard !display.readPrefAsBool(key: .forceSw),
@@ -66,13 +86,24 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
         continue
       }
 
-      guard let values = display.readDDCValues(for: .brightness, tries: 1, minReplyDelay: nil), values.1 > 0 else {
-        AutomationLogger.log("Could not read current brightness for display \(display.identifier); \(state.rawValue) preset not saved")
-        continue
+      let ddcValues = display.readDDCValues(for: .brightness, tries: 1, minReplyDelay: nil)
+      var brightness: Float
+      var source: String
+      var usesCachedEffectiveBrightness = false
+      if let values = ddcValues, values.1 > 0 {
+        brightness = display.convDDCToValue(for: .brightness, from: values.0)
+        source = "DDC read"
+      } else {
+        guard display.prefExists(for: .brightness) else {
+          AutomationLogger.log("Could not read current brightness for display \(display.identifier) and no cached value exists; \(state.rawValue) preset not saved")
+          continue
+        }
+        brightness = display.getBrightness()
+        source = "cached brightness after DDC read failure"
+        usesCachedEffectiveBrightness = true
       }
 
-      var brightness = display.convDDCToValue(for: .brightness, from: values.0)
-      if !prefs.bool(forKey: PrefKey.disableCombinedBrightness.rawValue) {
+      if !prefs.bool(forKey: PrefKey.disableCombinedBrightness.rawValue), !usesCachedEffectiveBrightness {
         if brightness > 0 {
           let switchingPoint = display.combinedBrightnessSwitchingValue()
           brightness = switchingPoint + brightness * (1 - switchingPoint)
@@ -84,6 +115,8 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
           // At DDC zero, use MonitorControl's cached effective value, which
           // includes the software dimming level in combined brightness mode.
           brightness = display.getBrightness()
+          source = "cached brightness (combined mode with DDC at zero)"
+          usesCachedEffectiveBrightness = true
         }
       }
       guard brightness.isFinite else {
@@ -93,10 +126,9 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
 
       self.presets.save(brightness, for: state, displayID: display.prefsId)
       savedCount += 1
-      AutomationLogger.log("Registered \(state.rawValue) preset for display \(display.identifier): \(Int((brightness * 100).rounded()))%")
+      AutomationLogger.log("Registered \(state.rawValue) preset for display \(display.identifier): \(Int((brightness * 100).rounded()))% (source: \(source))")
     }
     AutomationLogger.log("Registered \(state.rawValue) preset on \(savedCount) of \(displays.count) DDC-capable displays")
-    self.refreshMenu()
   }
 
   private func refreshMenu() {
@@ -108,8 +140,10 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
     }
 
     self.appendItem("明るさ自動化", to: menu, action: nil, enabled: false)
-    self.appendItem("現在の明るさを昼用に登録", to: menu, action: #selector(self.registerDayPreset(_:)))
-    self.appendItem("現在の明るさを夜用に登録", to: menu, action: #selector(self.registerNightPreset(_:)))
+    let dayTitle = self.isRegisteringPreset ? "昼用プリセットを登録中…" : "現在の明るさを昼用に登録"
+    let nightTitle = self.isRegisteringPreset ? "夜用プリセットを登録中…" : "現在の明るさを夜用に登録"
+    self.appendItem(dayTitle, to: menu, action: #selector(self.registerDayPreset(_:)), enabled: !self.isRegisteringPreset)
+    self.appendItem(nightTitle, to: menu, action: #selector(self.registerNightPreset(_:)), enabled: !self.isRegisteringPreset)
 
     for display in DisplayManager.shared.getDdcCapableDisplays() {
       let day = self.presets.brightness(for: .day, displayID: display.prefsId)
