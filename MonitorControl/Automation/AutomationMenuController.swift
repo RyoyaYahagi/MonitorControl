@@ -86,7 +86,16 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
         continue
       }
 
-      let ddcValues = display.readDDCValues(for: .brightness, tries: 1, minReplyDelay: nil)
+      let lifecycleStateAllowsRead = DispatchQueue.main.sync {
+        app.sleepID == 0 && app.reconfigureID == 0
+      }
+      let tries: UInt = Arm64DDC.isArm64 ? 0 : 1
+      let ddcValues = display.readDDCValues(
+        for: .brightness,
+        tries: tries,
+        minReplyDelay: nil,
+        lifecycleStateAllowsRead: lifecycleStateAllowsRead
+      )
       var brightness: Float
       var source: String
       var usesCachedEffectiveBrightness = false

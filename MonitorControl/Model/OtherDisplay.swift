@@ -418,9 +418,18 @@ class OtherDisplay: Display {
     }
   }
 
-  func readDDCValues(for command: Command, tries: UInt, minReplyDelay delay: UInt64?) -> (current: UInt16, max: UInt16)? {
+  func readDDCValues(
+    for command: Command,
+    tries: UInt,
+    minReplyDelay delay: UInt64?,
+    lifecycleStateAllowsRead: Bool? = nil
+  ) -> (current: UInt16, max: UInt16)? {
     var values: (UInt16, UInt16)?
-    guard app.sleepID == 0, app.reconfigureID == 0, !self.readPrefAsBool(key: .forceSw), !self.readPrefAsBool(key: .unavailableDDC, for: command) else {
+    let canReadNow = lifecycleStateAllowsRead ?? (app.sleepID == 0 && app.reconfigureID == 0)
+    guard canReadNow,
+          !self.readPrefAsBool(key: .forceSw),
+          !self.readPrefAsBool(key: .unavailableDDC, for: command)
+    else {
       return values
     }
     let controlCodes = self.getRemapControlCodes(command: command)
