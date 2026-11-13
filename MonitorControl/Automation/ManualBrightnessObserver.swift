@@ -85,6 +85,34 @@ final class DDCManualBrightnessObserver: ManualBrightnessChangeObserving {
       self.previousValues[displayID] = observed
     }
 
+    for display in DisplayManager.shared.getAppleDisplays() where display.isBuiltIn() && !display.isDummy {
+      let displayID = display.identifier
+      let observed = display.getAppleBrightness()
+      guard observed.isFinite, observed > 0 else {
+        self.logUnobservableDisplay(displayID, reason: "Apple brightness read returned zero or an invalid value")
+        continue
+      }
+      self.unobservableDisplays.remove(displayID)
+
+      if display.smoothBrightnessRunning {
+        self.previousValues[displayID] = observed
+        continue
+      }
+
+      if let target = self.automatedTargets[displayID] {
+        self.automatedTargets.removeValue(forKey: displayID)
+        if abs(observed - target) <= 0.05 {
+          self.previousValues[displayID] = observed
+          continue
+        }
+      }
+
+      if let previous = self.previousValues[displayID], abs(observed - previous) > 0.02 {
+        detectedChange = true
+      }
+      self.previousValues[displayID] = observed
+    }
+
     return detectedChange
   }
 

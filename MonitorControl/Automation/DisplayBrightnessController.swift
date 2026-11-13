@@ -5,6 +5,17 @@ protocol AutomationBrightnessApplying: AnyObject {
   func apply(_ state: AutomationLightState) -> Bool
 }
 
+enum AutomationDisplayProvider {
+  static func displays() -> [Display] {
+    let manager = DisplayManager.shared
+    let ddcDisplays: [Display] = manager.getDdcCapableDisplays()
+    let builtInAppleDisplays: [Display] = manager.getAppleDisplays().filter {
+      $0.isBuiltIn() && !$0.isDummy
+    }
+    return ddcDisplays + builtInAppleDisplays
+  }
+}
+
 final class MonitorControlBrightnessApplier: AutomationBrightnessApplying {
   private let presets: BrightnessPresetStore
   private let manualObserver: ManualBrightnessChangeObserving
@@ -18,10 +29,16 @@ final class MonitorControlBrightnessApplier: AutomationBrightnessApplying {
   }
 
   func apply(_ state: AutomationLightState) -> Bool {
-    let eligibleDisplays = DisplayManager.shared.getDdcCapableDisplays().filter { display in
-      !display.isSw()
-        && !display.readPrefAsBool(key: .forceSw)
-        && !display.readPrefAsBool(key: .unavailableDDC, for: .brightness)
+    let eligibleDisplays = AutomationDisplayProvider.displays().filter { display in
+      if let otherDisplay = display as? OtherDisplay {
+        return !otherDisplay.isSw()
+          && !otherDisplay.readPrefAsBool(key: .forceSw)
+          && !otherDisplay.readPrefAsBool(key: .unavailableDDC, for: .brightness)
+      }
+      if let appleDisplay = display as? AppleDisplay {
+        return appleDisplay.isBuiltIn() && !appleDisplay.isDummy
+      }
+      return false
     }
     guard !eligibleDisplays.isEmpty else {
       AutomationLogger.log("No eligible displays for \(state.rawValue) brightness preset; applied 0")
@@ -42,6 +59,9 @@ final class MonitorControlBrightnessApplier: AutomationBrightnessApplying {
       }
       self.manualObserver.noteAutomatedBrightnessChange(displayID: display.identifier, target: target)
       appliedCount += 1
+      if let appleDisplay = display as? AppleDisplay {
+        AutomationLogger.log("Applied \(state.rawValue) preset to built-in Apple display \(appleDisplay.identifier) (\(appleDisplay.name), \(appleDisplay.prefsId))")
+      }
     }
     AutomationLogger.log("Applied \(state.rawValue) brightness preset on \(appliedCount) of \(eligibleDisplays.count) eligible displays")
     return appliedCount > 0
