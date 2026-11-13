@@ -118,7 +118,7 @@ struct AutomationStateMachine {
     self.pendingReapplicationSources.insert(.manualOverride)
   }
 
-  mutating func prepareForManualStateSelection() {
+  mutating func prepareForExplicitStateSelection() {
     self.manualOverrideStartedAt = nil
     self.manualOverrideReferenceState = nil
     self.pendingReapplicationSources.removeAll()

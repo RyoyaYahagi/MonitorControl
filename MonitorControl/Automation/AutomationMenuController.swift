@@ -44,6 +44,16 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
     self.refreshMenu()
   }
 
+  @objc private func selectManualInputMode(_: Any?) {
+    DisplayBrightnessController.shared.setInputMode(.manual)
+    self.refreshMenu()
+  }
+
+  @objc private func selectTimerInputMode(_: Any?) {
+    DisplayBrightnessController.shared.setInputMode(.timer)
+    self.refreshMenu()
+  }
+
   @objc private func selectUnset(_: Any?) {
     DisplayBrightnessController.shared.clearTestSensorState()
     AutomationLogger.log("Manual sensor state cleared from automation menu")
@@ -142,11 +152,15 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
     guard let menu = self.menu else {
       return
     }
+    let controller = DisplayBrightnessController.shared
+    let selectedState = controller.currentInputState
     for item in menu.items.reversed() where item.tag == Self.automationMenuTag {
       menu.removeItem(item)
     }
 
     self.appendItem("明るさ自動化", to: menu, action: nil, enabled: false)
+    self.appendItem("入力：手動", to: menu, action: #selector(self.selectManualInputMode(_:)), showsInputModeSelection: true, inputMode: .manual)
+    self.appendItem("入力：タイマー（\(AutomationTimerSchedule.formattedDescription)）", to: menu, action: #selector(self.selectTimerInputMode(_:)), showsInputModeSelection: true, inputMode: .timer)
     let dayTitle = self.isRegisteringPreset ? "昼用プリセットを登録中…" : "現在の明るさを昼用に登録"
     let nightTitle = self.isRegisteringPreset ? "夜用プリセットを登録中…" : "現在の明るさを夜用に登録"
     self.appendItem(dayTitle, to: menu, action: #selector(self.registerDayPreset(_:)), enabled: !self.isRegisteringPreset)
@@ -160,9 +174,9 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
       self.appendItem("\(display.name) — 昼 \(dayText) / 夜 \(nightText)", to: menu, action: nil, enabled: false)
     }
 
-    self.appendItem("状態：昼", to: menu, action: #selector(self.selectDay(_:)), showsStateSelection: true, state: .day)
-    self.appendItem("状態：夜", to: menu, action: #selector(self.selectNight(_:)), showsStateSelection: true, state: .night)
-    self.appendItem("状態：未設定", to: menu, action: #selector(self.selectUnset(_:)), showsStateSelection: true, state: nil)
+    self.appendItem("状態：昼", to: menu, action: #selector(self.selectDay(_:)), showsStateSelection: true, state: .day, selectedState: selectedState)
+    self.appendItem("状態：夜", to: menu, action: #selector(self.selectNight(_:)), showsStateSelection: true, state: .night, selectedState: selectedState)
+    self.appendItem("状態：未設定", to: menu, action: #selector(self.selectUnset(_:)), showsStateSelection: true, state: nil, selectedState: selectedState)
     menu.addItem(.separator())
     menu.items.last?.tag = Self.automationMenuTag
   }
@@ -173,14 +187,20 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
     action: Selector?,
     enabled: Bool = true,
     showsStateSelection: Bool = false,
-    state: AutomationLightState? = nil
+    state: AutomationLightState? = nil,
+    selectedState: AutomationLightState? = nil,
+    showsInputModeSelection: Bool = false,
+    inputMode: AutomationInputMode? = nil
   ) {
     let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
     item.target = self
     item.isEnabled = enabled
     item.tag = Self.automationMenuTag
     if showsStateSelection {
-      item.state = ManualToggleSensorStateSource.shared.state == state ? .on : .off
+      item.state = selectedState == state ? .on : .off
+    }
+    if showsInputModeSelection {
+      item.state = DisplayBrightnessController.shared.currentInputMode == inputMode ? .on : .off
     }
     menu.addItem(item)
   }

@@ -51,7 +51,9 @@ final class MonitorControlBrightnessApplier: AutomationBrightnessApplying {
 final class DisplayBrightnessController {
   static let shared = DisplayBrightnessController()
 
-  private let sensorSource: SensorStateSource
+  private let manualSensorSource: SensorStateSource
+  private let timerSensorSource: SensorStateSource
+  private let inputModeStore: AutomationInputModeStore
   private var stateMachine = AutomationStateMachine()
   private let manualObserver: ManualBrightnessChangeObserving
   private let applier: AutomationBrightnessApplying
@@ -64,12 +66,24 @@ final class DisplayBrightnessController {
 
   init(
     sensorSource: SensorStateSource = ManualToggleSensorStateSource.shared,
+    timerSensorSource: SensorStateSource = TimerSensorStateSource(),
+    inputModeStore: AutomationInputModeStore = AutomationInputModeStore(),
     manualObserver: ManualBrightnessChangeObserving = DDCManualBrightnessObserver(),
     presets: BrightnessPresetStore = BrightnessPresetStore()
   ) {
-    self.sensorSource = sensorSource
+    self.manualSensorSource = sensorSource
+    self.timerSensorSource = timerSensorSource
+    self.inputModeStore = inputModeStore
     self.manualObserver = manualObserver
     self.applier = MonitorControlBrightnessApplier(presets: presets, manualObserver: manualObserver)
+  }
+
+  var currentInputMode: AutomationInputMode {
+    self.inputModeStore.mode
+  }
+
+  var currentInputState: AutomationLightState? {
+    self.activeSensorSource.readState()?.state
   }
 
   func start() {
@@ -111,28 +125,60 @@ final class DisplayBrightnessController {
     DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
   }
 
-  /// Test route for Phase 2; no UI or sensor network integration is included.
+  /// Manual input route for the automation menu and Phase 2 tests.
   func toggleTestSensorState() {
-    (self.sensorSource as? ManualToggleSensorStateSource)?.toggle()
+    guard let source = self.manualSensorSource as? ManualToggleSensorStateSource else {
+      return
+    }
+    self.setTestSensorState(source.state?.opposite ?? .day)
   }
 
   func setTestSensorState(_ state: AutomationLightState) {
-    guard let source = self.sensorSource as? ManualToggleSensorStateSource else {
+    guard let source = self.manualSensorSource as? ManualToggleSensorStateSource else {
       return
     }
+    self.updateInputMode(to: .manual)
     source.setState(state)
-    self.stateMachine.prepareForManualStateSelection()
+    self.applyExplicitlySelectedState(state, sourceDescription: "Manual sensor state")
+  }
 
+  func setInputMode(_ mode: AutomationInputMode) {
+    self.updateInputMode(to: mode)
+    guard mode == .timer else {
+      return
+    }
+    guard let reading = self.timerSensorSource.readState() else {
+      AutomationLogger.log("Timer input selected, but current state could not be determined")
+      return
+    }
+    self.applyExplicitlySelectedState(reading.state, sourceDescription: "Timer input selected")
+  }
+
+  func clearTestSensorState() {
+    self.updateInputMode(to: .manual)
+    (self.manualSensorSource as? ManualToggleSensorStateSource)?.clear()
+  }
+
+  private var activeSensorSource: SensorStateSource {
+    self.inputModeStore.mode == .manual ? self.manualSensorSource : self.timerSensorSource
+  }
+
+  private func updateInputMode(to mode: AutomationInputMode) {
+    let previousMode = self.inputModeStore.mode
+    self.inputModeStore.mode = mode
+    if previousMode != mode {
+      AutomationLogger.log("Automation input mode changed from \(previousMode.rawValue) to \(mode.rawValue)")
+    }
+  }
+
+  private func applyExplicitlySelectedState(_ state: AutomationLightState, sourceDescription: String) {
+    self.stateMachine.prepareForExplicitStateSelection()
     let now = Date()
     let didApply = self.applier.apply(state)
     if didApply {
       self.stateMachine.recordSuccessfulTransition(to: state, at: now)
     }
-    AutomationLogger.log("Manual sensor state selected: \(state.rawValue); immediate preset application \(didApply ? "succeeded" : "failed")")
-  }
-
-  func clearTestSensorState() {
-    (self.sensorSource as? ManualToggleSensorStateSource)?.clear()
+    AutomationLogger.log("\(sourceDescription) \(state.rawValue); immediate preset application \(didApply ? "succeeded" : "failed")")
   }
 
   private func scheduleNextPoll() {
@@ -178,7 +224,7 @@ final class DisplayBrightnessController {
     let now = Date()
     let manualChange = self.manualObserver.detectManualBrightnessChange()
     let outcome = self.stateMachine.evaluate(
-      reading: self.sensorSource.readState(),
+      reading: self.activeSensorSource.readState(),
       now: now,
       manualBrightnessChanged: manualChange
     )
