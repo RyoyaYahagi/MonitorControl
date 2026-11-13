@@ -241,10 +241,11 @@ final class DisplayBrightnessController {
   }
 
   private func poll() {
-    let now = Date()
     let manualChange = self.manualObserver.detectManualBrightnessChange()
+    let reading = self.activeSensorSource.readState()
+    let now = Date()
     let outcome = self.stateMachine.evaluate(
-      reading: self.activeSensorSource.readState(),
+      reading: reading,
       now: now,
       manualBrightnessChanged: manualChange
     )
