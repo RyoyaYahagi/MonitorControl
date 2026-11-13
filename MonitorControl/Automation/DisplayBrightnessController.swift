@@ -117,7 +117,18 @@ final class DisplayBrightnessController {
   }
 
   func setTestSensorState(_ state: AutomationLightState) {
-    (self.sensorSource as? ManualToggleSensorStateSource)?.setState(state)
+    guard let source = self.sensorSource as? ManualToggleSensorStateSource else {
+      return
+    }
+    source.setState(state)
+    self.stateMachine.prepareForManualStateSelection()
+
+    let now = Date()
+    let didApply = self.applier.apply(state)
+    if didApply {
+      self.stateMachine.recordSuccessfulTransition(to: state, at: now)
+    }
+    AutomationLogger.log("Manual sensor state selected: \(state.rawValue); immediate preset application \(didApply ? "succeeded" : "failed")")
   }
 
   func clearTestSensorState() {

@@ -36,13 +36,11 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
 
   @objc private func selectDay(_: Any?) {
     DisplayBrightnessController.shared.setTestSensorState(.day)
-    AutomationLogger.log("Manual sensor state set to day from automation menu")
     self.refreshMenu()
   }
 
   @objc private func selectNight(_: Any?) {
     DisplayBrightnessController.shared.setTestSensorState(.night)
-    AutomationLogger.log("Manual sensor state set to night from automation menu")
     self.refreshMenu()
   }
 

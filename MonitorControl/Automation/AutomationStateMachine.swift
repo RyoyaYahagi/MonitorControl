@@ -118,6 +118,12 @@ struct AutomationStateMachine {
     self.pendingReapplicationSources.insert(.manualOverride)
   }
 
+  mutating func prepareForManualStateSelection() {
+    self.manualOverrideStartedAt = nil
+    self.manualOverrideReferenceState = nil
+    self.pendingReapplicationSources.removeAll()
+  }
+
   mutating func recordSuccessfulTransition(to state: AutomationLightState, at date: Date) {
     self.activeState = state
     self.lastTransitionAt = date
