@@ -39,11 +39,27 @@ enum AutomationTimerSchedule {
   static let defaultNightStartMinutes = 19 * 60
 
   static var dayStartMinutes: Int {
-    self.minutes(forKey: self.dayStartMinutesKey, defaultValue: self.defaultDayStartMinutes)
+    get {
+      self.minutes(forKey: self.dayStartMinutesKey, defaultValue: self.defaultDayStartMinutes)
+    }
+    set {
+      guard (0..<24 * 60).contains(newValue) else {
+        return
+      }
+      UserDefaults.standard.set(newValue, forKey: self.dayStartMinutesKey)
+    }
   }
 
   static var nightStartMinutes: Int {
-    self.minutes(forKey: self.nightStartMinutesKey, defaultValue: self.defaultNightStartMinutes)
+    get {
+      self.minutes(forKey: self.nightStartMinutesKey, defaultValue: self.defaultNightStartMinutes)
+    }
+    set {
+      guard (0..<24 * 60).contains(newValue) else {
+        return
+      }
+      UserDefaults.standard.set(newValue, forKey: self.nightStartMinutesKey)
+    }
   }
 
   static var formattedDescription: String {

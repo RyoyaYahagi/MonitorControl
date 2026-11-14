@@ -174,6 +174,17 @@ final class DisplayBrightnessController {
     self.applyExplicitlySelectedState(reading.state, sourceDescription: "Timer input selected")
   }
 
+  func timerScheduleDidChange() {
+    guard self.inputModeStore.mode == .timer else {
+      return
+    }
+    guard let reading = self.timerSensorSource.readState() else {
+      AutomationLogger.log("Timer schedule changed, but current state could not be determined")
+      return
+    }
+    self.applyExplicitlySelectedState(reading.state, sourceDescription: "Timer schedule changed")
+  }
+
   func clearTestSensorState() {
     self.updateInputMode(to: .manual)
     (self.manualSensorSource as? ManualToggleSensorStateSource)?.clear()
