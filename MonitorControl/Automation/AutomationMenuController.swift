@@ -56,7 +56,7 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
 
   @objc private func selectDayStartTime(_ sender: NSMenuItem) {
     guard let minutes = sender.representedObject as? Int,
-          minutes != AutomationTimerSchedule.nightStartMinutes else {
+          minutes < AutomationTimerSchedule.nightStartMinutes else {
       self.refreshMenu()
       return
     }
@@ -68,7 +68,7 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
 
   @objc private func selectNightStartTime(_ sender: NSMenuItem) {
     guard let minutes = sender.representedObject as? Int,
-          minutes != AutomationTimerSchedule.dayStartMinutes else {
+          minutes > AutomationTimerSchedule.dayStartMinutes else {
       self.refreshMenu()
       return
     }
@@ -200,8 +200,8 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
     self.appendItem("明るさ自動化", to: menu, action: nil, enabled: false)
     self.appendItem("入力：手動", to: menu, action: #selector(self.selectManualInputMode(_:)), showsInputModeSelection: true, inputMode: .manual)
     self.appendItem("入力：タイマー（\(AutomationTimerSchedule.formattedDescription)）", to: menu, action: #selector(self.selectTimerInputMode(_:)), showsInputModeSelection: true, inputMode: .timer)
-    self.appendScheduleMenu(title: "昼の開始", selectedMinutes: AutomationTimerSchedule.dayStartMinutes, otherStartMinutes: AutomationTimerSchedule.nightStartMinutes, action: #selector(self.selectDayStartTime(_:)), to: menu)
-    self.appendScheduleMenu(title: "夜の開始", selectedMinutes: AutomationTimerSchedule.nightStartMinutes, otherStartMinutes: AutomationTimerSchedule.dayStartMinutes, action: #selector(self.selectNightStartTime(_:)), to: menu)
+    self.appendScheduleMenu(title: "昼の開始", selectedMinutes: AutomationTimerSchedule.dayStartMinutes, otherStartMinutes: AutomationTimerSchedule.nightStartMinutes, isEarlierThanOtherStart: true, action: #selector(self.selectDayStartTime(_:)), to: menu)
+    self.appendScheduleMenu(title: "夜の開始", selectedMinutes: AutomationTimerSchedule.nightStartMinutes, otherStartMinutes: AutomationTimerSchedule.dayStartMinutes, isEarlierThanOtherStart: false, action: #selector(self.selectNightStartTime(_:)), to: menu)
     let dayTitle = self.isRegisteringPreset ? "昼用プリセットを登録中…" : "現在の明るさを昼用に登録"
     let nightTitle = self.isRegisteringPreset ? "夜用プリセットを登録中…" : "現在の明るさを夜用に登録"
     self.appendItem(dayTitle, to: menu, action: #selector(self.registerDayPreset(_:)), enabled: !self.isRegisteringPreset)
@@ -222,14 +222,15 @@ final class AutomationMenuController: NSObject, NSMenuDelegate {
     menu.items.last?.tag = Self.automationMenuTag
   }
 
-  private func appendScheduleMenu(title: String, selectedMinutes: Int, otherStartMinutes: Int, action: Selector, to menu: NSMenu) {
+  private func appendScheduleMenu(title: String, selectedMinutes: Int, otherStartMinutes: Int, isEarlierThanOtherStart: Bool, action: Selector, to menu: NSMenu) {
     let submenu = NSMenu(title: title)
+    submenu.autoenablesItems = false
     for minutes in stride(from: 0, to: 24 * 60, by: 30) {
       let item = NSMenuItem(title: self.formatScheduleTime(minutes), action: action, keyEquivalent: "")
       item.target = self
       item.representedObject = minutes
       item.state = minutes == selectedMinutes ? .on : .off
-      item.isEnabled = minutes != otherStartMinutes
+      item.isEnabled = isEarlierThanOtherStart ? minutes < otherStartMinutes : minutes > otherStartMinutes
       submenu.addItem(item)
     }
     let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
